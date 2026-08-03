@@ -10,6 +10,14 @@
 
 ---
 
+## # Screenshot
+
+<p align="left">
+  <img src="screenshots/currency-converter.png" alt="Currency Converter Screenshot" width="350">
+</p>
+
+---
+
 ## # Features
 
 - Real-time currency conversion
@@ -39,9 +47,10 @@
 ```text
 currency-converter/
 ├── app.py
+├── screenshots/
+│   └── currency-converter.png
 ├── requirements.txt
-├── README.md
-└── LICENSE
+└── README.md
 ```
 
 ---
