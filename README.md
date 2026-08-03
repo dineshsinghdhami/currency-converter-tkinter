@@ -39,10 +39,6 @@
 ```text
 currency-converter/
 ├── app.py
-├── assets/
-│   ├── icons/
-│   ├── flags/
-│   └── images/
 ├── requirements.txt
 ├── README.md
 └── LICENSE
