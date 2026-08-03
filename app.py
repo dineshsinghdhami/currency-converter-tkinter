@@ -1,280 +1,420 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from io import BytesIO
+from tkinter import ttk
+
 import requests
 from PIL import Image, ImageTk
-from io import BytesIO
+
+
+WINDOW_WIDTH = 420
+WINDOW_HEIGHT = 560
+
+BACKGROUND = "#f5f5f5"
+CARD = "#ffffff"
+TEXT = "#222222"
+MUTED = "#666666"
+BORDER = "#dddddd"
+ACCENT = "#2f5bea"
+ACCENT_HOVER = "#2449bd"
+
+CURRENCY_COUNTRIES = {
+    "USD": "us",
+    "EUR": "eu",
+    "GBP": "gb",
+    "INR": "in",
+    "NPR": "np",
+    "JPY": "jp",
+    "CNY": "cn",
+    "AUD": "au",
+    "CAD": "ca",
+    "CHF": "ch",
+    "SGD": "sg",
+    "HKD": "hk",
+    "NZD": "nz",
+    "KRW": "kr",
+    "MXN": "mx",
+    "BRL": "br",
+    "ZAR": "za",
+    "AED": "ae",
+    "SAR": "sa",
+    "THB": "th",
+    "MYR": "my",
+    "IDR": "id",
+    "PHP": "ph",
+    "VND": "vn",
+    "PKR": "pk",
+    "BDT": "bd",
+    "LKR": "lk",
+    "SEK": "se",
+    "NOK": "no",
+    "DKK": "dk",
+    "PLN": "pl",
+    "TRY": "tr",
+    "RUB": "ru",
+    "TWD": "tw",
+}
+
+FALLBACK_RATES = {
+    "USD": 1.0,
+    "EUR": 0.92,
+    "GBP": 0.79,
+    "INR": 83.12,
+    "NPR": 132.50,
+    "JPY": 149.50,
+    "CNY": 7.24,
+    "AUD": 1.52,
+    "CAD": 1.36,
+    "CHF": 0.88,
+    "SGD": 1.34,
+    "HKD": 7.83,
+    "NZD": 1.64,
+    "KRW": 1342.50,
+    "MXN": 17.15,
+    "BRL": 4.97,
+    "ZAR": 18.65,
+    "AED": 3.67,
+    "SAR": 3.75,
+    "THB": 35.50,
+    "MYR": 4.72,
+    "IDR": 15650,
+    "PHP": 56.80,
+    "VND": 24500,
+    "PKR": 278.50,
+    "BDT": 110.25,
+    "LKR": 325.80,
+    "SEK": 10.87,
+    "NOK": 10.93,
+    "DKK": 6.86,
+    "PLN": 4.03,
+    "TRY": 32.15,
+    "RUB": 92.50,
+    "TWD": 32.20,
+}
+
 
 class CurrencyConverter:
-    def __init__(self, root):
+    def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Currency Converter")
-        self.root.geometry("400x650")
+        self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
         self.root.resizable(False, False)
-        self.root.configure(bg="#f0f0f5")
-        
-        # Variables
-        self.amount_var = tk.StringVar(value="1000.00")
+        self.root.configure(bg=BACKGROUND)
+
+        self.amount_var = tk.StringVar(value="1")
         self.from_currency = tk.StringVar(value="USD")
         self.to_currency = tk.StringVar(value="NPR")
-        self.converted_var = tk.StringVar(value="0.00")
-        
-        # Currency country codes for flag images
-        self.currency_countries = {
-            "USD": "us",    # United States Dollar
-            "EUR": "eu",    # Euro
-            "GBP": "gb",    # British Pound
-            "INR": "in",    # Indian Rupee
-            "NPR": "np",    # Nepalese Rupee
-            "JPY": "jp",    # Japanese Yen
-            "CNY": "cn",    # Chinese Yuan
-            "AUD": "au",    # Australian Dollar
-            "CAD": "ca",    # Canadian Dollar
-            "CHF": "ch",    # Swiss Franc
-            "SGD": "sg",    # Singapore Dollar
-            "HKD": "hk",    # Hong Kong Dollar
-            "NZD": "nz",    # New Zealand Dollar
-            "KRW": "kr",    # South Korean Won
-            "MXN": "mx",    # Mexican Peso
-            "BRL": "br",    # Brazilian Real
-            "ZAR": "za",    # South African Rand
-            "AED": "ae",    # UAE Dirham
-            "SAR": "sa",    # Saudi Riyal
-            "THB": "th",    # Thai Baht
-            "MYR": "my",    # Malaysian Ringgit
-            "IDR": "id",    # Indonesian Rupiah
-            "PHP": "ph",    # Philippine Peso
-            "VND": "vn",    # Vietnamese Dong
-            "PKR": "pk",    # Pakistani Rupee
-            "BDT": "bd",    # Bangladeshi Taka
-            "LKR": "lk",    # Sri Lankan Rupee
-            "SEK": "se",    # Swedish Krona
-            "NOK": "no",    # Norwegian Krone
-            "DKK": "dk",    # Danish Krone
-            "PLN": "pl",    # Polish Zloty
-            "TRY": "tr",    # Turkish Lira
-            "RUB": "ru",    # Russian Ruble
-            "TWD": "tw",    # Taiwan Dollar
-        }
-        
+        self.result_var = tk.StringVar(value="0.00")
+        self.rate_var = tk.StringVar(value="")
+        self.status_var = tk.StringVar(value="Loading rates...")
+
+        self.exchange_rates = FALLBACK_RATES.copy()
         self.flag_images = {}
-        self.exchange_rates = {}
-        
+
+        self.setup_style()
         self.load_flags()
-        self.fetch_exchange_rates()
-        
-        self.create_widgets()
-        self.calculate_conversion()
-    
-    def load_flags(self):
-        """Load flag images from flagcdn.com"""
-        for currency, country_code in self.currency_countries.items():
-            try:
-                # Using flagcdn.com for flag images
-                url = f"https://flagcdn.com/48x36/{country_code}.png"
-                response = requests.get(url, timeout=5)
-                img_data = Image.open(BytesIO(response.content))
-                img_data = img_data.resize((32, 24), Image.Resampling.LANCZOS)
-                self.flag_images[currency] = ImageTk.PhotoImage(img_data)
-            except:
-                # Create a placeholder if flag loading fails
-                placeholder = Image.new('RGB', (32, 24), color='#cccccc')
-                self.flag_images[currency] = ImageTk.PhotoImage(placeholder)
-    
-    def fetch_exchange_rates(self):
-        """Fetch real-time exchange rates from API"""
+        self.load_rates()
+        self.build_ui()
+        self.convert()
+
+    def setup_style(self) -> None:
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure(
+            "TCombobox",
+            padding=6,
+            font=("Segoe UI", 10),
+            fieldbackground=CARD,
+            background=CARD,
+            foreground=TEXT,
+            bordercolor=BORDER,
+            arrowcolor=TEXT,
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", CARD)],
+            selectbackground=[("readonly", CARD)],
+            selectforeground=[("readonly", TEXT)],
+        )
+
+    def load_flags(self) -> None:
+        for currency, country_code in CURRENCY_COUNTRIES.items():
+            self.flag_images[currency] = self.get_flag(country_code)
+
+    def get_flag(self, country_code: str) -> ImageTk.PhotoImage:
         try:
-            response = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=5)
+            response = requests.get(
+                f"https://flagcdn.com/48x36/{country_code}.png",
+                timeout=5,
+            )
+            response.raise_for_status()
+
+            image = Image.open(BytesIO(response.content)).convert("RGBA")
+            image = image.resize((30, 22), Image.Resampling.LANCZOS)
+        except (requests.RequestException, OSError):
+            image = Image.new("RGBA", (30, 22), "#cccccc")
+
+        return ImageTk.PhotoImage(image)
+
+    def load_rates(self) -> None:
+        try:
+            response = requests.get(
+                "https://api.exchangerate-api.com/v4/latest/USD",
+                timeout=5,
+            )
+            response.raise_for_status()
+
             data = response.json()
-            self.exchange_rates = data["rates"]
-        except:
-            # Fallback rates if API fails
+            rates = data.get("rates")
+
+            if not isinstance(rates, dict):
+                raise ValueError("Invalid API response")
+
             self.exchange_rates = {
-                "USD": 1.0, "EUR": 0.92, "GBP": 0.79, "INR": 83.12,
-                "NPR": 132.50, "JPY": 149.50, "CNY": 7.24, "AUD": 1.52,
-                "CAD": 1.36, "CHF": 0.88, "SGD": 1.34, "HKD": 7.83,
-                "NZD": 1.64, "KRW": 1342.50, "MXN": 17.15, "BRL": 4.97,
-                "ZAR": 18.65, "AED": 3.67, "SAR": 3.75, "THB": 35.50,
-                "MYR": 4.72, "IDR": 15650, "PHP": 56.80, "VND": 24500,
-                "PKR": 278.50, "BDT": 110.25, "LKR": 325.80, "SEK": 10.87,
-                "NOK": 10.93, "DKK": 6.86, "PLN": 4.03, "TRY": 32.15,
-                "RUB": 92.50, "TWD": 32.20
+                code: float(rates.get(code, FALLBACK_RATES[code]))
+                for code in CURRENCY_COUNTRIES
             }
-    
-    def create_widgets(self):
-        # Header
-        header_frame = tk.Frame(self.root, bg="#4a5a8a", height=120)
-        header_frame.pack(fill=tk.X)
-        header_frame.pack_propagate(False)
-        
-        title_label = tk.Label(header_frame, text="Currency Converter", 
-                              font=("Helvetica", 22, "bold"), 
-                              bg="#4a5a8a", fg="white")
-        title_label.pack(pady=15)
-        
-        subtitle_label = tk.Label(header_frame, 
-                                 text="Check live rates, set rate alerts, receive\nnotifications and more.",
-                                 font=("Helvetica", 10), 
-                                 bg="#4a5a8a", fg="#d0d0e0")
-        subtitle_label.pack()
-        
-        # Main container
-        main_frame = tk.Frame(self.root, bg="#f0f0f5")
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-        
-        # Amount Section
-        amount_label = tk.Label(main_frame, text="Amount", 
-                               font=("Helvetica", 11), 
-                               bg="#f0f0f5", fg="#666")
-        amount_label.pack(anchor="w", pady=(0, 5))
-        
-        amount_frame = tk.Frame(main_frame, bg="white", relief=tk.FLAT, bd=1, highlightthickness=1, highlightbackground="#ddd")
-        amount_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        # From currency section
-        from_frame = tk.Frame(amount_frame, bg="white")
-        from_frame.pack(side=tk.LEFT, padx=10, pady=12)
-        
-        # Flag image
-        self.from_flag_label = tk.Label(from_frame, image=self.flag_images[self.from_currency.get()],
-                                       bg="white")
-        self.from_flag_label.pack(side=tk.LEFT, padx=(0, 8))
-        
-        from_dropdown = ttk.Combobox(from_frame, textvariable=self.from_currency,
-                                    values=list(self.currency_countries.keys()),
-                                    state="readonly", width=6, font=("Helvetica", 12))
-        from_dropdown.pack(side=tk.LEFT)
-        from_dropdown.bind("<<ComboboxSelected>>", lambda e: self.update_from_flag())
-        
-        # Amount entry
-        amount_entry = tk.Entry(amount_frame, textvariable=self.amount_var,
-                               font=("Helvetica", 16), bg="white", 
-                               relief=tk.FLAT, justify=tk.RIGHT, bd=0)
-        amount_entry.pack(side=tk.RIGHT, padx=15, pady=12, fill=tk.X, expand=True)
-        amount_entry.bind("<KeyRelease>", lambda e: self.calculate_conversion())
-        
-        # Swap button
-        swap_btn = tk.Button(main_frame, text="⇅", font=("Helvetica", 20, "bold"),
-                           bg="#3d4d7a", fg="white", width=3, height=1,
-                           relief=tk.FLAT, cursor="hand2",
-                           command=self.swap_currencies)
-        swap_btn.pack(pady=10)
-        
-        # Converted Amount Section
-        converted_label = tk.Label(main_frame, text="Converted Amount",
-                                  font=("Helvetica", 11),
-                                  bg="#f0f0f5", fg="#666")
-        converted_label.pack(anchor="w", pady=(5, 5))
-        
-        converted_frame = tk.Frame(main_frame, bg="white", relief=tk.FLAT, bd=1, highlightthickness=1, highlightbackground="#ddd")
-        converted_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        # To currency section
-        to_frame = tk.Frame(converted_frame, bg="white")
-        to_frame.pack(side=tk.LEFT, padx=10, pady=12)
-        
-        # Flag image
-        self.to_flag_label = tk.Label(to_frame, image=self.flag_images[self.to_currency.get()],
-                                     bg="white")
-        self.to_flag_label.pack(side=tk.LEFT, padx=(0, 8))
-        
-        to_dropdown = ttk.Combobox(to_frame, textvariable=self.to_currency,
-                                  values=list(self.currency_countries.keys()),
-                                  state="readonly", width=6, font=("Helvetica", 12))
-        to_dropdown.pack(side=tk.LEFT)
-        to_dropdown.bind("<<ComboboxSelected>>", lambda e: self.update_to_flag())
-        
-        # Converted amount display
-        converted_display = tk.Label(converted_frame, textvariable=self.converted_var,
-                                    font=("Helvetica", 16, "bold"), bg="white",
-                                    fg="#333", anchor="e")
-        converted_display.pack(side=tk.RIGHT, padx=15, pady=12, fill=tk.X, expand=True)
-        
-        # Keypad (numbers only, no alphabet letters)
-        keypad_frame = tk.Frame(main_frame, bg="#e8e8f0")
-        keypad_frame.pack(fill=tk.BOTH, expand=True)
-        
-        buttons = [
-            ['1', '2', '3'],
-            ['4', '5', '6'],
-            ['7', '8', '9'],
-            ['.', '0', '⌫']
-        ]
-        
-        for i, row in enumerate(buttons):
-            row_frame = tk.Frame(keypad_frame, bg="#e8e8f0")
-            row_frame.pack(fill=tk.X, expand=True, pady=2)
-            
-            for j, btn_val in enumerate(row):
-                btn = tk.Button(row_frame, text=btn_val,
-                              font=("Helvetica", 16, "bold"),
-                              bg="white", fg="#333",
-                              relief=tk.FLAT, cursor="hand2",
-                              command=lambda x=btn_val: self.keypad_press(x))
-                btn.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=2)
-    
-    def update_from_flag(self):
-        """Update from currency flag"""
-        currency = self.from_currency.get()
-        self.from_flag_label.config(image=self.flag_images[currency])
-        self.calculate_conversion()
-    
-    def update_to_flag(self):
-        """Update to currency flag"""
-        currency = self.to_currency.get()
-        self.to_flag_label.config(image=self.flag_images[currency])
-        self.calculate_conversion()
-    
-    def keypad_press(self, value):
-        """Handle keypad button press"""
-        current = self.amount_var.get()
-        
-        if value == '⌫':
-            if len(current) > 0:
-                self.amount_var.set(current[:-1])
-        elif value == '.':
-            if '.' not in current:
-                if current == "":
-                    self.amount_var.set("0.")
-                else:
-                    self.amount_var.set(current + '.')
-        else:
-            if current == "0.00" or current == "0":
-                self.amount_var.set(value)
-            else:
-                self.amount_var.set(current + value)
-        
-        self.calculate_conversion()
-    
-    def swap_currencies(self):
-        """Swap from and to currencies"""
-        temp = self.from_currency.get()
-        self.from_currency.set(self.to_currency.get())
-        self.to_currency.set(temp)
-        
-        self.from_flag_label.config(image=self.flag_images[self.from_currency.get()])
-        self.to_flag_label.config(image=self.flag_images[self.to_currency.get()])
-        
-        self.calculate_conversion()
-    
-    def calculate_conversion(self):
-        """Calculate currency conversion"""
+
+            self.status_var.set("Live rates")
+        except (requests.RequestException, ValueError, TypeError):
+            self.exchange_rates = FALLBACK_RATES.copy()
+            self.status_var.set("Offline rates")
+
+    def build_ui(self) -> None:
+        container = tk.Frame(self.root, bg=BACKGROUND)
+        container.pack(fill=tk.BOTH, expand=True, padx=24, pady=24)
+
+        self.build_header(container)
+        self.build_converter_card(container)
+        self.build_status(container)
+
+    def build_header(self, parent: tk.Frame) -> None:
+        tk.Label(
+            parent,
+            text="Currency Converter",
+            bg=BACKGROUND,
+            fg=TEXT,
+            font=("Segoe UI", 22, "bold"),
+        ).pack(anchor="w")
+
+        tk.Label(
+            parent,
+            text="Convert currencies using current exchange rates.",
+            bg=BACKGROUND,
+            fg=MUTED,
+            font=("Segoe UI", 10),
+        ).pack(anchor="w", pady=(4, 18))
+
+    def build_converter_card(self, parent: tk.Frame) -> None:
+        card = tk.Frame(
+            parent,
+            bg=CARD,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
+        card.pack(fill=tk.X)
+
+        tk.Label(
+            card,
+            text="Amount",
+            bg=CARD,
+            fg=MUTED,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", padx=18, pady=(18, 6))
+
+        amount_entry = tk.Entry(
+            card,
+            textvariable=self.amount_var,
+            bg=CARD,
+            fg=TEXT,
+            insertbackground=TEXT,
+            relief=tk.FLAT,
+            font=("Segoe UI", 20, "bold"),
+        )
+        amount_entry.pack(fill=tk.X, padx=18, ipady=8)
+        amount_entry.bind("<KeyRelease>", lambda _event: self.convert())
+
+        separator = tk.Frame(card, bg=BORDER, height=1)
+        separator.pack(fill=tk.X, padx=18, pady=14)
+
+        currencies = tk.Frame(card, bg=CARD)
+        currencies.pack(fill=tk.X, padx=18)
+
+        self.from_flag = self.build_currency_selector(
+            currencies,
+            "From",
+            self.from_currency,
+            self.on_from_changed,
+        )
+        self.from_flag.master.master.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        swap_button = tk.Button(
+            currencies,
+            text="⇄",
+            command=self.swap_currencies,
+            bg=ACCENT,
+            fg="white",
+            activebackground=ACCENT_HOVER,
+            activeforeground="white",
+            relief=tk.FLAT,
+            cursor="hand2",
+            font=("Segoe UI", 14, "bold"),
+            width=3,
+        )
+        swap_button.pack(side=tk.LEFT, padx=10, pady=(22, 0), ipady=4)
+
+        self.to_flag = self.build_currency_selector(
+            currencies,
+            "To",
+            self.to_currency,
+            self.on_to_changed,
+        )
+        self.to_flag.master.master.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        result_box = tk.Frame(card, bg="#f8f9fb")
+        result_box.pack(fill=tk.X, padx=18, pady=18)
+
+        tk.Label(
+            result_box,
+            text="Converted amount",
+            bg="#f8f9fb",
+            fg=MUTED,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", padx=14, pady=(12, 4))
+
+        tk.Label(
+            result_box,
+            textvariable=self.result_var,
+            bg="#f8f9fb",
+            fg=TEXT,
+            font=("Segoe UI", 22, "bold"),
+        ).pack(anchor="w", padx=14)
+
+        tk.Label(
+            result_box,
+            textvariable=self.rate_var,
+            bg="#f8f9fb",
+            fg=MUTED,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", padx=14, pady=(4, 12))
+
+    def build_currency_selector(
+        self,
+        parent: tk.Frame,
+        label_text: str,
+        variable: tk.StringVar,
+        callback,
+    ) -> tk.Label:
+        wrapper = tk.Frame(parent, bg=CARD)
+
+        tk.Label(
+            wrapper,
+            text=label_text,
+            bg=CARD,
+            fg=MUTED,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(0, 6))
+
+        selector = tk.Frame(
+            wrapper,
+            bg=CARD,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
+        selector.pack(fill=tk.X)
+
+        flag = tk.Label(
+            selector,
+            image=self.flag_images[variable.get()],
+            bg=CARD,
+        )
+        flag.pack(side=tk.LEFT, padx=(8, 6), pady=8)
+
+        combo = ttk.Combobox(
+            selector,
+            textvariable=variable,
+            values=tuple(CURRENCY_COUNTRIES),
+            state="readonly",
+            width=5,
+        )
+        combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8), pady=4)
+        combo.bind("<<ComboboxSelected>>", callback)
+
+        return flag
+
+    def build_status(self, parent: tk.Frame) -> None:
+        status_row = tk.Frame(parent, bg=BACKGROUND)
+        status_row.pack(fill=tk.X, pady=(14, 0))
+
+        tk.Label(
+            status_row,
+            text="●",
+            bg=BACKGROUND,
+            fg="#2e9d65",
+            font=("Segoe UI", 9),
+        ).pack(side=tk.LEFT)
+
+        tk.Label(
+            status_row,
+            textvariable=self.status_var,
+            bg=BACKGROUND,
+            fg=MUTED,
+            font=("Segoe UI", 9),
+        ).pack(side=tk.LEFT, padx=(5, 0))
+
+    def on_from_changed(self, _event=None) -> None:
+        self.from_flag.configure(
+            image=self.flag_images[self.from_currency.get()]
+        )
+        self.convert()
+
+    def on_to_changed(self, _event=None) -> None:
+        self.to_flag.configure(
+            image=self.flag_images[self.to_currency.get()]
+        )
+        self.convert()
+
+    def swap_currencies(self) -> None:
+        old_from = self.from_currency.get()
+        old_to = self.to_currency.get()
+
+        self.from_currency.set(old_to)
+        self.to_currency.set(old_from)
+
+        self.from_flag.configure(
+            image=self.flag_images[self.from_currency.get()]
+        )
+        self.to_flag.configure(
+            image=self.flag_images[self.to_currency.get()]
+        )
+
+        self.convert()
+
+    def convert(self) -> None:
         try:
             amount = float(self.amount_var.get() or 0)
-            from_curr = self.from_currency.get()
-            to_curr = self.to_currency.get()
-            
-            # Convert through USD as base
-            amount_in_usd = amount / self.exchange_rates[from_curr]
-            converted_amount = amount_in_usd * self.exchange_rates[to_curr]
-            
-            self.converted_var.set(f"{converted_amount:.2f}")
-        except ValueError:
-            self.converted_var.set("0.00")
-        except Exception as e:
-            print(f"Conversion error: {e}")
-            self.converted_var.set("Error")
+            from_code = self.from_currency.get()
+            to_code = self.to_currency.get()
+
+            from_rate = self.exchange_rates[from_code]
+            to_rate = self.exchange_rates[to_code]
+
+            result = (amount / from_rate) * to_rate
+            current_rate = to_rate / from_rate
+
+            self.result_var.set(f"{result:,.2f} {to_code}")
+            self.rate_var.set(
+                f"1 {from_code} = {current_rate:,.4f} {to_code}"
+            )
+        except (ValueError, KeyError, ZeroDivisionError):
+            self.result_var.set("0.00")
+            self.rate_var.set("Enter a valid amount")
+
+
+def main() -> None:
+    root = tk.Tk()
+    CurrencyConverter(root)
+    root.mainloop()
+
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = CurrencyConverter(root)
-    root.mainloop()
+    main()
