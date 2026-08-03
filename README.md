@@ -5,7 +5,8 @@
 ![Requests](https://img.shields.io/badge/Requests-HTTP-orange)
 ![ExchangeRate API](https://img.shields.io/badge/ExchangeRate-API-lightgrey)
 
-**Currency Converter** is a modern desktop application built using **Python** and **Tkinter**. It provides fast and accurate real-time currency conversion through the ExchangeRate API with a clean, responsive, and user-friendly graphical interface.
+**Currency Converter** is a modern desktop application built using **Python** and **Tkinter**. 
+> **Note :** It provides fast and accurate real-time currency conversion through the ExchangeRate API with a clean, responsive, and user-friendly graphical interface.
 
 ---
 
